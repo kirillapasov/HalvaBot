@@ -1,6 +1,6 @@
-package com.hlv.HalvaBot.Config;
+package com.hlv.HalvaBot.Main;
 
-import com.hlv.HalvaBot.TelegramBot;
+import com.hlv.HalvaBot.Main.TelegramBot;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.event.ContextRefreshedEvent;
 import org.springframework.context.event.EventListener;

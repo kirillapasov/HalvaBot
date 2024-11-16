@@ -1,4 +1,4 @@
-package com.hlv.HalvaBot;
+package com.hlv.HalvaBot.Main;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;

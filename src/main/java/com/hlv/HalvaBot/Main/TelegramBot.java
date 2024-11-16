@@ -1,9 +1,11 @@
-package com.hlv.HalvaBot;
+package com.hlv.HalvaBot.Main;
+
 import com.hlv.HalvaBot.Model.UserState;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.GetFile;
+import org.telegram.telegrambots.meta.api.methods.send.SendDocument;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
@@ -22,16 +24,16 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 
-//Todo Добавить возможность загружать сканы документов для оформления,
-// возможность рассчитывать рассрочку, запись пользователей в БД
+//Todo запись пользователей в БД, отправка заявок и сканов документов на почту,
 @Component
 @AllArgsConstructor
 public class TelegramBot extends TelegramLongPollingBot {
+
     private final BotConfig botConfig;
     private Map<Long, UserState> userStates = new ConcurrentHashMap<>();
-    private Map<Long, Map<String, String>> userData = new  ConcurrentHashMap<>();
+    private Map<Long, Map<String, String>> userData = new ConcurrentHashMap<>();
     private final ExecutorService executorService = Executors.newCachedThreadPool();
-
+    private final Long targetChatId = -4506963924L;
 
     @Override
     public String getBotUsername() {
@@ -97,7 +99,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                                 одном удобном продукте. Узнать подробнее: https://halvacard.ru/cards/main/halva""";
 
                         sendMessage(chatId, HALVAINFO);
-                        sendPhoto(chatId, "C:\\Users\\Kiril\\Desktop\\HalvaBot\\src\\main\\resources\\halva.jpg");
+                        sendPhoto(chatId, "C:\\Users\\Kiril\\Desktop\\HalvaBot\\src\\main\\resources\\static\\halva.jpg");
                         sendMessageWithKeyboard(chatId, "Идём дальше");
                     }
 
@@ -203,7 +205,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                 calculateMonthlyPayment(chatId); // После всех данных - расчет
                 userStates.put(chatId, UserState.DEFAULT);
             }
-            default -> sendMessage(chatId, "Я вас не понял. Для начала введите /start.");
+            default -> sendMessageWithKeyboard(chatId, "");
         }
     }
 
@@ -224,6 +226,7 @@ public class TelegramBot extends TelegramLongPollingBot {
             e.printStackTrace();
         }
     }
+
     private void saveDataToFile(Long chatId) {
         Map<String, String> userApplicationData = userData.get(chatId);
         if (userApplicationData != null) {
@@ -238,6 +241,16 @@ public class TelegramBot extends TelegramLongPollingBot {
                     }
                 });
                 writer.write("\n-----------------\n");
+                String messageTextForChat = " ";
+                for (Map.Entry<String, String> entry : userApplicationData.entrySet()) {
+                    String key = entry.getKey();
+                    String value = entry.getValue();
+
+                    messageTextForChat += key + " - " + value + "\n";
+                }
+
+                sendMessageToTargetChat("Заявка от пользователя с Chat ID: " + chatId + "\n" + messageTextForChat);
+
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -247,6 +260,7 @@ public class TelegramBot extends TelegramLongPollingBot {
     private void saveUserData(Long chatId, String key, String value) {
         userData.computeIfAbsent(chatId, k -> new HashMap<>()).put(key, value);
     }
+
     private void sendMessageWithKeyboard(Long chatId, String textToSend) {
         SendMessage sendMessage = new SendMessage();
         sendMessage.setChatId(String.valueOf(chatId));
@@ -328,7 +342,7 @@ public class TelegramBot extends TelegramLongPollingBot {
 
                 String fileName = "документ" + chatId + ".jpg";
 
-                java.io.File outputFile = new java.io.File("C:\\Users\\Kiril\\Desktop\\Сканы доков\\" + fileName);
+                java.io.File outputFile = new java.io.File("C:\\Users\\Kiril\\Desktop\\Сканы доков\\скан" + fileName);
                 if (outputFile.exists()) {
                     int counter = 1;
                     while (outputFile.exists()) {
@@ -351,44 +365,40 @@ public class TelegramBot extends TelegramLongPollingBot {
                 }
 
                 sendMessage(chatId, "Документ успешно получен и сохранен.");
+                sendDocumentToTargetChat(chatId, outputFile);
             } catch (TelegramApiException | IOException e) {
                 e.printStackTrace();
                 sendMessage(chatId, "Ошибка при загрузке документа. Попробуйте снова.");
             }
         });
     }
+
+
     private void calculateMonthlyPayment(Long chatId) {
         Map<String, String> userApplicationData = userData.get(chatId);
 
         if (userApplicationData != null) {
             try {
-                // Получаем введенные данные
                 double amount = Double.parseDouble(userApplicationData.get("Сумма покупки"));
                 int months = Integer.parseInt(userApplicationData.get("Количество месяцев"));
                 boolean hasSubscription = "да".equalsIgnoreCase(userApplicationData.get("Подписка"));
                 boolean hasSuperOption = "да".equalsIgnoreCase(userApplicationData.get("Супер опция"));
                 String cardType = userApplicationData.get("Тип карты");
 
-                // Проверка на наличие супер опции без подписки
                 if (hasSuperOption && !hasSubscription) {
                     sendMessage(chatId, "Ошибка! Супер опция доступна только при наличии подписки.");
                     return;
                 }
 
-                // Стоимость подписки и супер опции
                 double subscriptionCost = hasSubscription ? 399 : 0;
                 double superOptionCost = (hasSuperOption && hasSubscription) ? 399 : 0;
 
-                // Скидка для социальной карты
                 if ("социальная".equalsIgnoreCase(cardType)) {
                     subscriptionCost -= 100;
                     superOptionCost -= 100;
                 }
 
-                // Рассчитываем ежемесячный платеж
                 double monthlyPayment = (amount / months) + subscriptionCost + superOptionCost;
-
-                // Отправка результата
                 sendMessage(chatId, String.format("Ваш ежемесячный платеж: %.2f руб.", monthlyPayment));
                 sendMessage(chatId, "Если вы новый пользователь в первый месяц подписка и супер опция для вас бесплатны");
             } catch (NumberFormatException e) {
@@ -397,5 +407,45 @@ public class TelegramBot extends TelegramLongPollingBot {
         } else {
             sendMessage(chatId, "Не удалось получить данные для расчета.");
         }
+    }
+    public void sendDocumentToTargetChat(Long userChatId, File documentFile) {
+        try {
+            SendDocument sendDocument = new SendDocument();
+            sendDocument.setChatId(targetChatId.toString());
+            sendDocument.setCaption(String.format(
+                    "Скан документа от пользователя:" + "\n " + userChatId
+
+            ));
+            sendDocument.setDocument(new InputFile(documentFile));
+            execute(sendDocument);
+        } catch (TelegramApiException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void sendMessageToTargetChat(String messageText) {
+        try {
+            SendMessage message = new SendMessage();
+            message.setChatId(targetChatId.toString());
+            message.setText(messageText);
+            execute(message);
+        } catch (TelegramApiException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void handleRefinanceApplication(Long userChatId, String userName, String applicationDetails) {
+        String messageText = String.format(
+                "Новая заявка на рефинансирование:\n\nИмя пользователя: %s\nChat ID: %d\nДетали заявки:\n%s",
+                userName, userChatId, applicationDetails
+        );
+        sendMessageToTargetChat(messageText);
+    }
+    public void handleHalvaApplication(Long userChatId, String userName, String applicationDetails) {
+        String messageText = String.format(
+                "Новая заявка на Халву:\n\nИмя пользователя: %s\nChat ID: %d\nДетали заявки:\n%s",
+                userName, userChatId, applicationDetails
+        );
+        sendMessageToTargetChat(messageText);
     }
 }

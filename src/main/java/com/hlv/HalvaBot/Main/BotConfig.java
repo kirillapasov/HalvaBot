@@ -1,4 +1,4 @@
-package com.hlv.HalvaBot;
+package com.hlv.HalvaBot.Main;
 
 import lombok.Data;
 import org.springframework.beans.factory.annotation.Value;
