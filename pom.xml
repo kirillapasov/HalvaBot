@@ -9,7 +9,7 @@
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com.hlv</groupId>
-	<artifactId>HalvaBot</artifactId>
+	<artifactId>halvabot</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>HalvaBot</name>
 	<description>Bot for halva card users </description>
